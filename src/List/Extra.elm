@@ -1,6 +1,6 @@
 module List.Extra exposing
     ( last, init, getAt, uncons, unconsLast, maximumBy, maximumWith, minimumBy, minimumWith, andMap, andThen, reverseMap, takeWhile, dropWhile, unique, uniqueBy, allDifferent, allDifferentBy, setIf, setAt, remove, updateIf, updateAt, updateIfIndex, removeAt, removeIfIndex, filterNot, swapAt, stableSortWith
-    , intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs
+    , intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto
     , foldl1, foldr1, indexedFoldl, indexedFoldr, Step(..), stoppableFoldl
     , scanl, scanl1, scanr, scanr1, mapAccuml, mapAccumr, unfoldr, iterate, initialize, cycle, reverseRange
     , splitAt, splitWhen, takeWhileRight, dropWhileRight, span, break, stripPrefix, group, groupWhile, inits, tails, select, selectSplit, gatherEquals, gatherEqualsBy, gatherWith, subsequencesNonEmpty, frequencies
@@ -22,7 +22,7 @@ module List.Extra exposing
 
 # List transformations
 
-@docs intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs
+@docs intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto
 
 
 # Folds
@@ -1190,6 +1190,109 @@ uniquePairs xs =
 reverseAppend : List a -> List a -> List a
 reverseAppend list1 list2 =
     List.foldl (::) list2 list1
+
+
+{-| Return all possible ways of spliting the list into non-empty groups.
+
+The function returns a _list of lists of groups_. Each list of groups is a
+possible _partition_ of the input list. Individual groups have the non-empty
+list type `(a, List a)`. Order is ignored at all levels - if two partitons or
+two groups differ only in the order of their elements, we return only one.
+
+Conceptually, we are dividing up the input list by drawing lines between its
+elements - a new group only comes into being once one or more elements have been
+divided off, and it is defined by those elements.
+
+    partitions [ "Jo", "Chris", "Alex" ]
+    --> [ [ ( "Jo", [ "Chris", "Alex" ] ) ], [ ( "Jo", [] ), ( "Chris", [ "Alex" ] ) ], [ ( "Jo", [ "Chris" ] ), ( "Alex", [] ) ], [ ( "Chris", [] ), ( "Jo", [ "Alex" ] ) ], [ ( "Jo", [] ), ( "Chris", [] ), ( "Alex", [] ) ] ]
+
+This example could represent all the ways in which Jo, Chris, and Alex can
+each belong to exactly one family. (At least arguably, a family doesn't exist
+without any members, and can be defined entirely by listing who those members
+are.)
+
+Contrast with `allocationsInto`.
+
+**Notes:** This function follows the mathematical definition of _partition
+of a set_. (Some language libraries call it `setPartitions` / `set_partitions`.)
+It is not closely related to `List.partition`. Although we take and return lists
+for convenience, all these enities are theoretically sets. For background see
+[Wikipedia](https://en.wikipedia.org/wiki/Partition_of_a_set); of interest may
+be that
+
+    partitions []
+    --> [ [] ]
+
+I.e. an empty list is considered to have exactly one partition, itself empty.
+
+-}
+partitions : List a -> List (List ( a, List a ))
+partitions list =
+    List.concatMap
+        (\partitionLength ->
+            partitionsInto partitionLength list
+        )
+        (List.range 0 (List.length list))
+
+
+{-| Return all the ways in which the list can be split into the given number of
+non-empty groups.
+
+Equivalent to (but more efficient than)
+`partitions [...] |> List.filter (List.length >> (==) numberOfGroups)`.
+
+    partitionsInto 2 [ "Jo", "Chris", "Alex" ]
+    --> [ [ ( "Jo", [] ), ( "Chris", [ "Alex" ] ) ], [ ( "Jo", [ "Chris" ] ), ( "Alex", [] ) ], [ ( "Chris", [] ), ( "Jo", [ "Alex" ] ) ] ]
+
+See `partitions` for more details.
+
+-}
+partitionsInto : Int -> List a -> List (List ( a, List a ))
+partitionsInto numberOfGroups list =
+    if numberOfGroups < 0 || numberOfGroups > List.length list then
+        []
+
+    else
+        partitionsIntoHelper numberOfGroups list
+
+
+partitionsIntoHelper :
+    Int
+    -> List a
+    -> List (List ( a, List a ))
+partitionsIntoHelper numberOfGroups list =
+    case list of
+        [] ->
+            if numberOfGroups == 0 then
+                [ [] ]
+
+            else
+                []
+
+        listFirst :: listRest ->
+            if numberOfGroups == 0 then
+                []
+
+            else
+                List.map ((::) ( listFirst, [] ))
+                    (partitionsIntoHelper (numberOfGroups - 1) listRest)
+                    ++ List.concatMap
+                        (applyToEachInTurn
+                            (\( groupFirst, groupRest ) ->
+                                ( listFirst, groupFirst :: groupRest )
+                            )
+                        )
+                        (partitionsIntoHelper numberOfGroups listRest)
+
+
+applyToEachInTurn : (a -> a) -> List a -> List (List a)
+applyToEachInTurn f list =
+    case list of
+        [] ->
+            []
+
+        x :: xs ->
+            (f x :: xs) :: List.map ((::) x) (applyToEachInTurn f xs)
 
 
 {-| Variant of `foldl` that has no starting value argument and treats the head of the list as its starting value. If the list is empty, return `Nothing`.

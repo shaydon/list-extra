@@ -4,6 +4,7 @@ import Expect
 import Fuzz exposing (int, intRange, list)
 import List exposing (map, range)
 import List.Extra exposing (..)
+import Random
 import Test exposing (Test, describe, fuzz, fuzz2, fuzz3, test)
 import Tuple exposing (first)
 
@@ -1133,5 +1134,75 @@ all =
                         0
                         (List.range 1 1000)
                         |> Expect.equal 50
+            ]
+        , describe "partitions"
+            [ test "empty list has single empty partition" <|
+                \() ->
+                    partitions []
+                        |> Expect.equal [ [] ]
+            , test "singleton list has one trivial partition" <|
+                \() ->
+                    partitions [ 1 ]
+                        |> Expect.equal [ [ ( 1, [] ) ] ]
+            , test "number of partitions matches Bell numbers" <|
+                \() ->
+                    List.map
+                        (List.length << partitions << List.range 1)
+                        (List.range 0 6)
+                        |> Expect.equalLists
+                            [ 1, 1, 2, 5, 15, 52, 203 ]
+            , test "partitions cover original list" <|
+                \() ->
+                    let
+                        lists =
+                            List.map (List.range 1) (List.range 0 6)
+                    in
+                    List.map partitions lists
+                        |> List.map
+                            (List.map
+                                (List.concatMap (\( x, xs ) -> x :: xs)
+                                    >> List.sort
+                                )
+                                >> unique
+                            )
+                        |> Expect.equalLists (List.map List.singleton lists)
+            ]
+        , describe "partitionsInto"
+            [ test
+                "empty list can be partitioned into single empty partition"
+              <|
+                \() ->
+                    partitionsInto 0 []
+                        |> Expect.equal [ [] ]
+            , fuzz2 int (list int) "non-empty list has no empty partitions" <|
+                \first rest ->
+                    partitionsInto 0 (first :: rest)
+                        |> Expect.equal []
+            , fuzz2 (intRange Random.minInt -1)
+                (list int)
+                "negative number of groups returns no partitions"
+              <|
+                \numberOfGroups list_ ->
+                    partitionsInto numberOfGroups list_
+                        |> Expect.equal []
+            , fuzz2 (intRange 1 Random.maxInt)
+                (list int)
+                "number of groups above list length returns no partitions"
+              <|
+                \extraGroups list_ ->
+                    partitionsInto (List.length list_ + extraGroups) list_
+                        |> Expect.equal []
+            , test "all partitions have requested number of groups" <|
+                \() ->
+                    let
+                        list_ =
+                            List.range 1 6
+
+                        sizes =
+                            list_
+                    in
+                    List.map (\k -> partitionsInto k list_) sizes
+                        |> List.map (List.map List.length >> unique)
+                        |> Expect.equalLists (List.map List.singleton sizes)
             ]
         ]
