@@ -1,6 +1,6 @@
 module List.Extra exposing
     ( last, init, getAt, uncons, unconsLast, maximumBy, maximumWith, minimumBy, minimumWith, andMap, andThen, reverseMap, takeWhile, dropWhile, unique, uniqueBy, allDifferent, allDifferentBy, setIf, setAt, remove, updateIf, updateAt, updateIfIndex, removeAt, removeIfIndex, filterNot, swapAt, stableSortWith
-    , intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto
+    , intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto, allocationsInto
     , foldl1, foldr1, indexedFoldl, indexedFoldr, Step(..), stoppableFoldl
     , scanl, scanl1, scanr, scanr1, mapAccuml, mapAccumr, unfoldr, iterate, initialize, cycle, reverseRange
     , splitAt, splitWhen, takeWhileRight, dropWhileRight, span, break, stripPrefix, group, groupWhile, inits, tails, select, selectSplit, gatherEquals, gatherEqualsBy, gatherWith, subsequencesNonEmpty, frequencies
@@ -22,7 +22,7 @@ module List.Extra exposing
 
 # List transformations
 
-@docs intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto
+@docs intercalate, transpose, subsequences, permutations, interweave, cartesianProduct, uniquePairs, partitions, partitionsInto, allocationsInto
 
 
 # Folds
@@ -1283,6 +1283,55 @@ partitionsIntoHelper numberOfGroups list =
                             )
                         )
                         (partitionsIntoHelper numberOfGroups listRest)
+
+
+{-| Return all ways in which the list's elements can be distributed between a
+given number of groups, including cases where one or more groups don't receive
+any elements.
+
+The function returns a _list of lists of groups_. Each list of groups is a
+possible _allocation_ of the elements of the input list. We consider the order
+of groups within an allocation siginificant, but not the order of elements
+within a group - so we might return both `[ [1, 2], [] ]` and `[ [], [1, 2] ]`,
+but only ever one of `[ [1, 2], [] ]` and `[ [2, 1], [] ]`.
+
+Conceptially, we are placing elements into one of a set number of pre-existing
+'buckets', each of which has an idenity independent of which, if any, elements
+we put in it. (We could identify it by its list index.)
+
+    allocationsInto 2 [ "Jo", "Chris", "Alex" ]
+    --> [ [ [ "Jo", "Chris", "Alex"], [] ], [ [ "Chris", "Alex" ], [ "Jo" ] ], [ [ "Jo", "Alex" ], [ "Chris" ] ], [ [ "Alex" ], [ "Jo", "Chris" ] ], [ [ "Jo", "Chris" ], [ "Alex" ] ], [ [ "Chris" ], [ "Jo", "Alex" ] ], [ [ "Jo" ], [ "Chris", "Alex" ] ], [ [], [ "Jo", "Chris", "Alex" ] ] ]
+
+This example could represent all the ways in which Jo, Chris and Alex could each
+be allocated to one of two houses. (A house exists whether or not anyone lives
+in it, and can be identified by its street address.)
+
+Contrast with `partitions` / `partitionsInto`.
+
+**Notes:** we use _allocation_ as a reasonable name for an intutively
+straightforward idea, but it is not a defined mathematical term. There is no
+function `allocations` to return a list of all allocations into any number of
+groups because such a list would necessarily be infinite.
+
+-}
+allocationsInto : Int -> List a -> List (List (List a))
+allocationsInto numberOfGroups list =
+    if numberOfGroups < 0 then
+        []
+
+    else
+        allocationsIntoHelper numberOfGroups list
+
+
+allocationsIntoHelper : Int -> List a -> List (List (List a))
+allocationsIntoHelper numberOfGroups list =
+    case list of
+        [] ->
+            [ List.repeat numberOfGroups [] ]
+
+        listFirst :: listRest ->
+            List.concatMap (applyToEachInTurn ((::) listFirst))
+                (allocationsIntoHelper numberOfGroups listRest)
 
 
 applyToEachInTurn : (a -> a) -> List a -> List (List a)
